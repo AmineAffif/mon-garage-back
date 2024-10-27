@@ -1,6 +1,14 @@
 Rails.application.routes.draw do
-  # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
-
-  # Defines the root path route ("/")
-  # root "articles#index"
+  namespace :api do
+    namespace :v1 do
+      resources :garages, only: [:index, :show, :create, :update, :destroy]
+      resources :employees, only: [:index, :show, :create, :update, :destroy]
+      resources :clients, only: [:index, :show, :create, :update, :destroy]
+      resources :vehicles, only: [:index, :show, :create, :update, :destroy]
+      resources :repairs, only: [:index, :show, :create, :update, :destroy]
+      resources :interventions, only: [:index, :show, :create, :update, :destroy]
+      resources :notifications, only: [:index, :show, :create, :update, :destroy]
+      resources :customers, only: [:index, :show, :create, :update, :destroy]
+    end
+  end
 end
