@@ -39,6 +39,7 @@ gem "rack-cors"
 # gem 'pg', '~> 1.5', '>= 1.5.4'
 gem 'google-cloud-firestore'
 gem 'firebase-admin-sdk'
+gem 'rest-client'
 
 
 

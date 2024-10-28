@@ -8,7 +8,9 @@ Rails.application.routes.draw do
       resources :repairs, only: [:index, :show, :create, :update, :destroy]
       resources :interventions, only: [:index, :show, :create, :update, :destroy]
       resources :notifications, only: [:index, :show, :create, :update, :destroy]
-      resources :customers, only: [:index, :show, :create, :update, :destroy]
+      resources :customers, only: [:index, :show, :create, :update, :destroy] do
+        get 'vehicles', to: 'vehicles#by_customer'
+      end
     end
   end
 end

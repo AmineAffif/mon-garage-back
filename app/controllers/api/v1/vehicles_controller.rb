@@ -52,4 +52,13 @@ class Api::V1::VehiclesController < ApplicationController
     FirebaseRestClient.firestore_request("vehicles/#{params[:id]}", :delete)
     render json: { status: "vehicle supprimé avec succès" }, status: :ok
   end
+
+  def by_customer
+    customer_id = params[:customer_id]
+    response = FirebaseRestClient.firestore_request('vehicles')
+    vehicles = FirebaseRestClient.parse_firestore_documents(response)
+
+    customer_vehicles = vehicles.select { |vehicle| vehicle[:customerId] == customer_id }
+    render json: customer_vehicles, status: :ok
+  end
 end
