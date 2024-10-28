@@ -13,6 +13,7 @@ Rails.application.routes.draw do
       resources :customers, only: [:index, :show, :create, :update, :destroy] do
         get 'vehicles', to: 'vehicles#by_customer'
       end
+      resources :users, only: [:index, :show, :create, :update, :destroy]
     end
   end
 end

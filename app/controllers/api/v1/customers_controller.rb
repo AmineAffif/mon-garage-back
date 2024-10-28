@@ -24,7 +24,7 @@ class Api::V1::CustomersController < ApplicationController
   end
 
   def create
-    customer_data = params.require(:customer).permit(:name, :phone, :email)
+    customer_data = params.require(:customer).permit(:name, :phone, :email, :role, :userId)
     document = FirebaseRestClient.firestore_request('customers', :post, customer_data.to_h)
   
     if document
