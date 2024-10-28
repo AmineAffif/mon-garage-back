@@ -12,12 +12,48 @@ class Api::V1::RepairsController < ApplicationController
   def show
     repair_id = params[:id]
     response = FirebaseRestClient.firestore_request("repairs/#{repair_id}")
+  
+    Rails.logger.info("Response from Firestore (Repair): #{response.inspect}") # Log de vérification des réparations
+  
     if response && response["fields"]
-      repair = FirebaseRestClient.parse_firestore_document(response)
+      # Récupère l'ID du client via vehicle
+      customer_id = response.dig("fields", "customer", "mapValue", "fields", "id", "stringValue")
+  
+      if customer_id
+        # Récupère les détails du client via son ID
+        customer_response = FirebaseRestClient.firestore_request("customers/#{customer_id}")
+        Rails.logger.info("Response from Firestore (Customer): #{customer_response.inspect}") # Log de vérification du client
+  
+        customer_name = if customer_response && customer_response["fields"]
+                          customer_response.dig("fields", "name", "stringValue")
+                        else
+                          "Unknown Customer"
+                        end
+      else
+        customer_name = "Unknown Customer"
+      end
+  
+      repair = {
+        id: repair_id,
+        vehicle: {
+          make: response.dig("fields", "vehicle", "mapValue", "fields", "make", "stringValue"),
+          model: response.dig("fields", "vehicle", "mapValue", "fields", "model", "stringValue"),
+          year: response.dig("fields", "vehicle", "mapValue", "fields", "year", "integerValue"),
+          licensePlate: response.dig("fields", "vehicle", "mapValue", "fields", "licensePlate", "stringValue"),
+        },
+        customer_name: customer_name,
+        description: response.dig("fields", "description", "stringValue"),
+        date: response.dig("fields", "date", "stringValue"),
+        status: response.dig("fields", "status", "stringValue")
+      }
+  
       render json: repair, status: :ok
     else
       render json: { error: "Repair not found" }, status: :not_found
     end
+  rescue StandardError => e
+    Rails.logger.error("Erreur dans le contrôleur Repairs#show : #{e.message}")
+    render json: { error: "Internal Server Error" }, status: :internal_server_error
   end
 
   def create
