@@ -27,16 +27,16 @@ class Api::V1::VehiclesController < ApplicationController
   end
 
   def create
-    vehicle_data = params.require(:vehicle).permit(:make, :model, :year, :licensePlate, :customerId, :customerName)
+    vehicle_data = params.require(:vehicle).permit(:make, :model, :year, :licensePlate, :firebaseAuthUserId, :customerName)
     document = FirebaseRestClient.firestore_request('vehicles', :post, vehicle_data.to_h)
-  
+    
     if document
       render json: { status: "vehicle ajouté avec succès", document_data: document }, status: :created
     else
       render json: { error: "Erreur lors de l'ajout du vehicle" }, status: :internal_server_error
     end
   end  
-
+  
   def update
     vehicle_data = params.require(:vehicle).permit(:make, :model, :year, :licensePlate, :customerId, :customerName)
     document = FirebaseRestClient.firestore_request("vehicles/#{params[:id]}", :patch, vehicle_data.to_h)
@@ -54,11 +54,18 @@ class Api::V1::VehiclesController < ApplicationController
   end
 
   def by_customer
-    customer_id = params[:customer_id]
+    firebase_auth_user_id = params[:firebaseAuthUserId]
     response = FirebaseRestClient.firestore_request('vehicles')
-    vehicles = FirebaseRestClient.parse_firestore_documents(response)
-
-    customer_vehicles = vehicles.select { |vehicle| vehicle[:customerId] == customer_id }
-    render json: customer_vehicles, status: :ok
+    
+    if response && response["documents"]
+      vehicles = FirebaseRestClient.parse_firestore_documents(response)
+      # Filtrer les véhicules qui ont le bon firebaseAuthUserId
+      customer_vehicles = vehicles.select { |vehicle| vehicle[:firebaseAuthUserId] == firebase_auth_user_id }
+      render json: customer_vehicles, status: :ok
+    else
+      render json: { error: "Erreur de récupération des véhicules" }, status: :not_found
+    end
   end
+  
+  
 end

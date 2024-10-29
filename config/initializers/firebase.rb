@@ -31,9 +31,9 @@ class FirebaseRestClient
     response["documents"].map do |doc|
       fields = doc["fields"]
       parsed_data = { id: doc["name"].split("/").last }
-      
       fields.each do |field_name, field_value|
         value_type = field_value.keys.first # Ex: "stringValue", "integerValue"
+        parsed_data[:role] = field_value[value_type] if field_name == "role"
         parsed_data[field_name.to_sym] = field_value[value_type]
       end
 
@@ -66,11 +66,11 @@ class FirebaseRestClient
     end
   end
 
-  # Méthode générique Firestore pour tous les modèles
   def self.firestore_request(path, method = :get, body = nil)
     project_id = "mon-garage-1b850"
-    uri = URI("https://firestore.googleapis.com/v1/projects/#{project_id}/databases/(default)/documents/#{path}")
-
+    base_url = "https://firestore.googleapis.com/v1/projects/#{project_id}/databases/(default)/documents"
+    uri = path == ':runQuery' ? URI("#{base_url}:runQuery") : URI("#{base_url}/#{path}")
+  
     http = Net::HTTP.new(uri.host, uri.port)
     http.use_ssl = true
     request = case method
@@ -83,23 +83,24 @@ class FirebaseRestClient
               else
                 Net::HTTP::Get.new(uri.request_uri)
               end
-
+  
     request["Authorization"] = "Bearer #{get_access_token}"
     request["Content-Type"] = "application/json"
-
+  
     # Ajout du corps JSON pour les méthodes POST et PATCH
-    request.body = build_firestore_document(body).to_json if body
-
+    request.body = body.to_json if body
+  
     response = http.request(request)
-
+  
     Rails.logger.info("Firebase REST Request: #{method.upcase} #{uri}")
     Rails.logger.info("Request Body: #{request.body}") if request.body
     Rails.logger.info("Response Code: #{response.code}")
     Rails.logger.info("Response Body: #{response.body}")
-
+  
     JSON.parse(response.body) if response.is_a?(Net::HTTPSuccess)
   rescue StandardError => e
     Rails.logger.error("Erreur dans la requête Firestore REST : #{e.message}")
     nil
   end
+
 end

@@ -21,7 +21,7 @@ class Api::V1::RepairsController < ApplicationController
   
       if customer_id
         # Récupère les détails du client via son ID
-        customer_response = FirebaseRestClient.firestore_request("customers/#{customer_id}")
+        customer_response = FirebaseRestClient.firestore_request("users/#{customer_id}")
         Rails.logger.info("Response from Firestore (Customer): #{customer_response.inspect}") # Log de vérification du client
   
         customer_name = if customer_response && customer_response["fields"]
@@ -65,7 +65,7 @@ class Api::V1::RepairsController < ApplicationController
     if customer_data[:id].nil?
       # Crée le client sur Firestore
       customer_response = RestClient.post(
-        'https://firestore.googleapis.com/v1/projects/mon-garage-1b850/databases/(default)/documents/customers',
+        'https://firestore.googleapis.com/v1/projects/mon-garage-1b850/databases/(default)/documents/users',
         { fields: {
             name: { stringValue: customer_data[:name] },
             phone: { stringValue: customer_data[:phone] },

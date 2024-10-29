@@ -4,7 +4,12 @@ Rails.application.routes.draw do
       resources :garages, only: [:index, :show, :create, :update, :destroy]
       resources :employees, only: [:index, :show, :create, :update, :destroy]
       resources :clients, only: [:index, :show, :create, :update, :destroy]
-      resources :vehicles, only: [:index, :show, :create, :update, :destroy]
+      resources :vehicles, only: [:index, :show, :create, :update, :destroy] do
+        collection do
+          get 'by_customer', to: 'vehicles#by_customer'
+        end
+      end
+  
       resources :repairs, only: [:index, :show, :create, :update, :destroy]
       resources :interventions, only: [:index, :show, :create, :update, :destroy] do
         get 'by_repair/:repair_id', to: 'interventions#by_repair', on: :collection
@@ -13,7 +18,13 @@ Rails.application.routes.draw do
       resources :customers, only: [:index, :show, :create, :update, :destroy] do
         get 'vehicles', to: 'vehicles#by_customer'
       end
-      resources :users, only: [:index, :show, :create, :update, :destroy]
+      resources :users, only: [:index, :create, :update, :destroy] do
+        collection do
+          get 'by_firebase_auth_user_id/:firebaseAuthUserId', to: 'users#show_by_firebase_auth_user_id'
+        end
+      end
+      get 'customers', to: 'users#index_customers'
+      get 'customers', to: 'users#index_professionals'
     end
   end
 end
