@@ -89,4 +89,36 @@ class Api::V1::UsersController < ApplicationController
     FirebaseRestClient.firestore_request("users/#{params[:id]}", :delete)
     render json: { status: "User supprimé avec succès" }, status: :ok
   end
+
+  def destroy_by_firebase_auth_user_id
+    firebase_auth_user_id = params[:firebaseAuthUserId]
+
+    # Requête structurée pour rechercher l'utilisateur par firebaseAuthUserId
+    response = FirebaseRestClient.firestore_request(':runQuery', :post, {
+      structuredQuery: {
+        from: [{ collectionId: 'users' }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: 'firebaseAuthUserId' },
+            op: 'EQUAL',
+            value: { stringValue: firebase_auth_user_id }
+          }
+        },
+        limit: 1
+      }
+    })
+
+    if response.is_a?(Array) && response.first['document']
+      document = response.first['document']
+      document_name = document['name']
+      document_id = document_name.split('/').last
+
+      # Suppression du document dans Firestore
+      FirebaseRestClient.firestore_request("users/#{document_id}", :delete)
+      render json: { status: "User supprimé avec succès" }, status: :ok
+    else
+      render json: { error: 'User not found' }, status: :not_found
+    end
+  end
+  
 end
