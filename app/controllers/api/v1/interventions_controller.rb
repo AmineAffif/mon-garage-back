@@ -28,9 +28,14 @@ class Api::V1::InterventionsController < ApplicationController
       }
     }
   
+    # Création de l'intervention dans Firestore
     document = FirebaseRestClient.firestore_request('interventions', :post, firestore_data)
   
     if document
+      # Mise à jour du statut de la réparation associée à "in progress"
+      repair_id = intervention_data[:repairId]
+      update_repair_status(repair_id, 'in progress')
+
       render json: { id: document['name'].split('/').last, **intervention_data }, status: :created
     else
       render json: { error: "Erreur lors de l'ajout de l'intervention" }, status: :internal_server_error
@@ -60,6 +65,22 @@ class Api::V1::InterventionsController < ApplicationController
 
     repair_interventions = interventions.select { |intervention| intervention[:repairId] == repair_id }
     render json: repair_interventions, status: :ok
+  end
+
+  private
+
+  def update_repair_status(repair_id, new_status)
+    # Préparation des données de mise à jour du statut
+    repair_data = {
+      fields: {
+        status: { stringValue: new_status }
+      }
+    }
+  
+    # Mise à jour du document de réparation avec le nouveau statut
+    FirebaseRestClient.firestore_request("repairs/#{repair_id}", :patch, repair_data)
+  rescue RestClient::ExceptionWithResponse => e
+    Rails.logger.error("Erreur lors de la mise à jour du statut de la réparation : #{e.response}")
   end
 
 end
