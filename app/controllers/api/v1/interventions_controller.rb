@@ -19,14 +19,23 @@ class Api::V1::InterventionsController < ApplicationController
 
   def create
     intervention_data = params.require(:intervention).permit(:repairId, :date, :description)
-    document = FirebaseRestClient.firestore_request('interventions', :post, intervention_data.to_h)
+
+    firestore_data = {
+      fields: {
+        repairId: { stringValue: intervention_data[:repairId] },
+        date: { stringValue: intervention_data[:date] },
+        description: { stringValue: intervention_data[:description] }
+      }
+    }
+  
+    document = FirebaseRestClient.firestore_request('interventions', :post, firestore_data)
   
     if document
       render json: { id: document['name'].split('/').last, **intervention_data }, status: :created
     else
       render json: { error: "Erreur lors de l'ajout de l'intervention" }, status: :internal_server_error
     end
-  end  
+  end
 
   def update
     intervention_data = params.require(:intervention).permit(:repairId, :date, :description)
