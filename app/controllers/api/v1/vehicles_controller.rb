@@ -15,7 +15,7 @@ class Api::V1::VehiclesController < ApplicationController
       model: response["fields"]["model"]["stringValue"],
       year: response["fields"]["year"]["integerValue"].to_i,
       licensePlate: response["fields"]["licensePlate"]["stringValue"],
-      customerId: response["fields"]["customerId"]["integerValue"].to_i,
+      firebaseAuthUserId: response["fields"]["firebaseAuthUserId"]["integerValue"].to_i,
       customerName: response["fields"]["customerName"]["stringValue"]
     } : nil
 
@@ -38,7 +38,7 @@ class Api::V1::VehiclesController < ApplicationController
   end  
   
   def update
-    vehicle_data = params.require(:vehicle).permit(:make, :model, :year, :licensePlate, :customerId, :customerName)
+    vehicle_data = params.require(:vehicle).permit(:make, :model, :year, :licensePlate, :firebaseAuthUserId, :customerName)
     document = FirebaseRestClient.firestore_request("vehicles/#{params[:id]}", :patch, vehicle_data.to_h)
 
     if document
@@ -67,5 +67,18 @@ class Api::V1::VehiclesController < ApplicationController
     end
   end
   
+  def by_repair
+    repair_id = params[:repair_id]
+    response = FirebaseRestClient.firestore_request('vehicles')
+    
+    if response && response["documents"]
+      vehicles = FirebaseRestClient.parse_firestore_documents(response)
+      # Filtrer les véhicules qui ont le bon repair_id
+      repair_vehicles = vehicles.select { |vehicle| vehicle[:repair_id] == repair_id }
+      render json: repair_vehicles, status: :ok
+    else
+      render json: { error: "Erreur de récupération des véhicules" }, status: :not_found
+    end
+  end
   
 end
