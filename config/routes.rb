@@ -10,7 +10,9 @@ Rails.application.routes.draw do
         end
       end
 
-      resources :repairs, only: [:index, :show, :create, :update, :destroy]
+      resources :repairs, only: [:index, :show, :create, :update, :destroy] do
+        patch 'update_status', on: :member
+      end
       resources :interventions, only: [:index, :show, :create, :update, :destroy] do
         get 'by_repair/:repair_id', to: 'interventions#by_repair', on: :collection
       end

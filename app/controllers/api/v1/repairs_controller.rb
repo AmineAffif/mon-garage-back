@@ -204,6 +204,27 @@ class Api::V1::RepairsController < ApplicationController
     end
   end
 
+  def update_status
+    repair_id = params[:id]
+    new_status = params.require(:status)
+
+    begin
+      FirebaseRestClient.firestore_request(
+        "repairs/#{repair_id}?updateMask.fieldPaths=status", # Met à jour uniquement le champ `status`
+        :patch,
+        {
+          fields: {
+            status: { stringValue: new_status }
+          }
+        }
+      )
+      render json: { status: "Repair status updated successfully" }, status: :ok
+    rescue RestClient::ExceptionWithResponse => e
+      Rails.logger.error("Erreur lors de la mise à jour du statut de la réparation : #{e.response}")
+      render json: { error: "Erreur lors de la mise à jour du statut de la réparation" }, status: :internal_server_error
+    end
+  end
+
   def destroy
     repair_id = params[:id]
     FirebaseRestClient.firestore_request("repairs/#{repair_id}", :delete)
@@ -225,8 +246,4 @@ class Api::V1::RepairsController < ApplicationController
       end
     end
   end
-  
-  
-  
-  
 end
