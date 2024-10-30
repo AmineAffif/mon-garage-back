@@ -1,0 +1,14 @@
+<% require_relative '../../utils/date_formatter' %>
+
+<h1>Bonjour <%= @customer[:fullName] %>,</h1>
+
+<p>Une nouvelle intervention a été effectuée sur votre véhicule :</p>
+
+<p>Véhicule : <%= @vehicle[:make] %> <%= @vehicle[:model] %> (<%= @vehicle[:year] %>)</p>
+<p>Description de l'intervention : <%= @intervention[:description] %></p>
+<p>Date de l'intervention : <%= DateFormatter.format(DateTime.parse(@intervention[:date]), :long) %></p>
+
+<p>Merci de nous contacter si vous avez des questions.</p>
+
+<p>Cordialement,</p>
+<p>L'équipe de Mon Garage</p>

@@ -64,9 +64,22 @@ class Api::V1::UsersController < ApplicationController
   
 
   def create
-    user_data = params.require(:user).permit(:firebaseAuthUserId, :email, :role, :fullName, :phone) # Utiliser firebaseAuthUserId
-    document = FirebaseRestClient.firestore_request('users', :post, user_data.to_h)
-  
+    user_data = params.require(:user).permit(:firebaseAuthUserId, :email, :role, :fullName, :phone)
+    
+    # Formater les données de l'utilisateur pour Firestore
+    firestore_payload = {
+      fields: {
+        firebaseAuthUserId: { stringValue: user_data[:firebaseAuthUserId] },
+        email: { stringValue: user_data[:email] },
+        role: { stringValue: user_data[:role] },
+        fullName: { stringValue: user_data[:fullName] },
+        phone: { stringValue: user_data[:phone] }
+      }
+    }
+    
+    # Envoi des données à Firestore
+    document = FirebaseRestClient.firestore_request('users', :post, firestore_payload)
+    
     if document
       render json: { status: "User ajouté avec succès", document_data: document }, status: :created
     else

@@ -1,0 +1,11 @@
+<h1>Bonjour <%= @customer[:fullName] %>,</h1>
+
+<p>Une nouvelle réparation a été créée pour votre véhicule :</p>
+
+<p>Véhicule : <%= @vehicle[:make] %> <%= @vehicle[:model] %> (<%= @vehicle[:year] %>)</p>
+<p>Description : <%= @repair[:description] %></p>
+
+<p>N'hésitez pas à nous contacter si vous avez des questions.</p>
+
+<p>Cordialement,</p>
+<p>L'équipe de MonGarage</p>

@@ -8,6 +8,48 @@ class Api::V1::RepairsController < ApplicationController
     repairs = FirebaseRestClient.parse_firestore_documents(response)
     render json: repairs, status: :ok
   end
+
+  def index_by_firebase_auth_user_id
+    firebase_auth_user_id = params[:firebaseAuthUserId]
+    
+    # Requête structurée correcte pour filtrer les documents par firebaseAuthUserId
+    response = FirebaseRestClient.firestore_request(':runQuery', :post, {
+      structuredQuery: {
+        from: [{ collectionId: 'repairs' }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: 'customer.firebaseAuthUserId' },
+            op: 'EQUAL',
+            value: { stringValue: firebase_auth_user_id }
+          }
+        }
+      }
+    })
+  
+    # Vérifiez si la réponse est un tableau et contient des documents
+    if response.is_a?(Array)
+      # Si la réponse contient des réparations, formate la réponse ainsi :
+      repairs = response.map do |document|
+        fields = document['document']['fields']
+        {
+          id: document['document']['name'].split('/').last,
+          description: fields['description']['stringValue'],
+          date: fields['date']['stringValue'],
+          status: fields['status']['stringValue'],
+          vehicle: {
+            make: fields.dig('vehicle', 'mapValue', 'fields', 'make', 'stringValue'),
+            model: fields.dig('vehicle', 'mapValue', 'fields', 'model', 'stringValue'),
+            year: fields.dig('vehicle', 'mapValue', 'fields', 'year', 'integerValue'),
+            licensePlate: fields.dig('vehicle', 'mapValue', 'fields', 'licensePlate', 'stringValue')
+          }
+        }
+      end
+
+      render json: repairs, status: :ok
+    else
+      render json: { error: 'Réparations non trouvées' }, status: :not_found
+    end
+  end
   
   def show_by_firebase_auth_user_id
     firebase_auth_user_id = params[:firebaseAuthUserId]
@@ -48,30 +90,44 @@ class Api::V1::RepairsController < ApplicationController
     end
   end
 
+  # app/controllers/api/v1/repairs_controller.rb
   def show
     repair_id = params[:id]
     response = FirebaseRestClient.firestore_request("repairs/#{repair_id}")
-  
+
     Rails.logger.info("Response from Firestore (Repair): #{response.inspect}") # Log de vérification des réparations
-  
+
     if response && response["fields"]
-      # Récupère l'ID du client via vehicle
-      customer_id = response.dig("fields", "customer", "mapValue", "fields", "id", "stringValue")
-  
-      if customer_id
-        # Récupère les détails du client via son ID
-        customer_response = FirebaseRestClient.firestore_request("users/#{customer_id}")
-        Rails.logger.info("Response from Firestore (Customer): #{customer_response.inspect}") # Log de vérification du client
-  
-        customer_name = if customer_response && customer_response["fields"]
-                          customer_response.dig("fields", "name", "stringValue")
+      # Récupère `firebaseAuthUserId` à partir de la réparation
+      firebase_auth_user_id = response.dig("fields", "customer", "mapValue", "fields", "firebaseAuthUserId", "stringValue")
+
+      if firebase_auth_user_id
+        # Recherche du document utilisateur par `firebaseAuthUserId`
+        customer_response = FirebaseRestClient.firestore_request(':runQuery', :post, {
+          structuredQuery: {
+            from: [{ collectionId: 'users' }],
+            where: {
+              fieldFilter: {
+                field: { fieldPath: 'firebaseAuthUserId' },
+                op: 'EQUAL',
+                value: { stringValue: firebase_auth_user_id }
+              }
+            },
+            limit: 1
+          }
+        })
+
+        # Vérifiez si le client a été trouvé
+        customer_name = if customer_response.is_a?(Array) && customer_response.first['document']
+                          customer_document = customer_response.first['document']
+                          customer_document.dig('fields', 'fullName', 'stringValue')
                         else
                           "Unknown Customer"
                         end
       else
         customer_name = "Unknown Customer"
       end
-  
+
       repair = {
         id: repair_id,
         vehicle: {
@@ -85,7 +141,7 @@ class Api::V1::RepairsController < ApplicationController
         date: response.dig("fields", "date", "stringValue"),
         status: response.dig("fields", "status", "stringValue")
       }
-  
+
       render json: repair, status: :ok
     else
       render json: { error: "Repair not found" }, status: :not_found
@@ -94,6 +150,7 @@ class Api::V1::RepairsController < ApplicationController
     Rails.logger.error("Erreur dans le contrôleur Repairs#show : #{e.message}")
     render json: { error: "Internal Server Error" }, status: :internal_server_error
   end
+
 
   def create
     # Récupère les données du client et du véhicule
@@ -176,10 +233,26 @@ class Api::V1::RepairsController < ApplicationController
       repair_data.to_json,
       { content_type: :json, accept: :json }
     )
-
+  
     # Vérifie et affiche la réponse
     if response.code == 200
       puts "Création réussie : #{response.body}"
+      
+      # Envoi de l'email de notification au client
+      customer = {
+        fullName: document.dig('fields', 'fullName', 'stringValue'),
+        email: document.dig('fields', 'email', 'stringValue')
+      }
+      vehicle = {
+        make: vehicle_data[:make],
+        model: vehicle_data[:model],
+        year: vehicle_data[:year]
+      }
+      repair = {
+        description: params[:repair][:description]
+      }
+      RepairMailer.repair_created(customer, vehicle, repair).deliver_now
+  
       render json: { status: "Repair created successfully" }, status: :created
     else
       puts "Erreur de création : #{response.body}"
@@ -189,6 +262,7 @@ class Api::V1::RepairsController < ApplicationController
     puts "Erreur lors de la requête : #{e.response}"
     render json: { error: "Erreur lors de la création de la réparation" }, status: :unprocessable_entity
   end
+  
   
   
 
@@ -204,26 +278,75 @@ class Api::V1::RepairsController < ApplicationController
     end
   end
 
-  def update_status
-    repair_id = params[:id]
-    new_status = params.require(:status)
+  # app/controllers/api/v1/repairs_controller.rb
+def update_status
+  repair_id = params[:id]
+  new_status = params.require(:status)
 
-    begin
-      FirebaseRestClient.firestore_request(
-        "repairs/#{repair_id}?updateMask.fieldPaths=status", # Met à jour uniquement le champ `status`
-        :patch,
-        {
-          fields: {
-            status: { stringValue: new_status }
-          }
+  begin
+    # Mise à jour du statut de la réparation dans Firestore
+    FirebaseRestClient.firestore_request(
+      "repairs/#{repair_id}?updateMask.fieldPaths=status",
+      :patch,
+      {
+        fields: {
+          status: { stringValue: new_status }
         }
-      )
-      render json: { status: "Repair status updated successfully" }, status: :ok
-    rescue RestClient::ExceptionWithResponse => e
-      Rails.logger.error("Erreur lors de la mise à jour du statut de la réparation : #{e.response}")
-      render json: { error: "Erreur lors de la mise à jour du statut de la réparation" }, status: :internal_server_error
+      }
+    )
+
+    # Si le statut est 'completed', envoyez un email au client
+    if new_status == 'completed'
+      repair_response = FirebaseRestClient.firestore_request("repairs/#{repair_id}")
+      if repair_response && repair_response["fields"]
+        # Récupération de `firebaseAuthUserId` du client à partir de la réparation
+        firebase_auth_user_id = repair_response.dig("fields", "customer", "mapValue", "fields", "firebaseAuthUserId", "stringValue")
+        
+        # Recherche du document utilisateur par `firebaseAuthUserId`
+        customer_response = FirebaseRestClient.firestore_request(':runQuery', :post, {
+          structuredQuery: {
+            from: [{ collectionId: 'users' }],
+            where: {
+              fieldFilter: {
+                field: { fieldPath: 'firebaseAuthUserId' },
+                op: 'EQUAL',
+                value: { stringValue: firebase_auth_user_id }
+              }
+            },
+            limit: 1
+          }
+        })
+
+        # Vérifiez si le client a été trouvé
+        if customer_response.is_a?(Array) && customer_response.first['document']
+          document = customer_response.first['document']
+          customer = {
+            fullName: document.dig('fields', 'fullName', 'stringValue'),
+            email: document.dig('fields', 'email', 'stringValue')
+          }
+          vehicle = {
+            make: repair_response.dig("fields", "vehicle", "mapValue", "fields", "make", "stringValue"),
+            model: repair_response.dig("fields", "vehicle", "mapValue", "fields", "model", "stringValue"),
+            year: repair_response.dig("fields", "vehicle", "mapValue", "fields", "year", "integerValue")
+          }
+
+          # Envoi de l'email de notification
+          RepairMailer.repair_completed(customer, vehicle).deliver_now
+        else
+          Rails.logger.error("Client introuvable pour l'envoi de l'email de réparation terminée : #{firebase_auth_user_id}")
+        end
+      else
+        Rails.logger.error("Réparation introuvable pour l'envoi de l'email de réparation terminée")
+      end
     end
+
+    render json: { status: "Repair status updated successfully" }, status: :ok
+  rescue RestClient::ExceptionWithResponse => e
+    Rails.logger.error("Erreur lors de la mise à jour du statut de la réparation : #{e.response}")
+    render json: { error: "Erreur lors de la mise à jour du statut de la réparation" }, status: :internal_server_error
   end
+end
+
 
   def destroy
     repair_id = params[:id]

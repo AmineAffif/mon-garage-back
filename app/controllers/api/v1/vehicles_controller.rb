@@ -28,14 +28,28 @@ class Api::V1::VehiclesController < ApplicationController
 
   def create
     vehicle_data = params.require(:vehicle).permit(:make, :model, :year, :licensePlate, :firebaseAuthUserId, :customerName)
-    document = FirebaseRestClient.firestore_request('vehicles', :post, vehicle_data.to_h)
+    
+    # Formater les données du véhicule pour Firestore
+    firestore_payload = {
+      fields: {
+        make: { stringValue: vehicle_data[:make] },
+        model: { stringValue: vehicle_data[:model] },
+        year: { integerValue: vehicle_data[:year].to_i },
+        licensePlate: { stringValue: vehicle_data[:licensePlate] },
+        firebaseAuthUserId: { stringValue: vehicle_data[:firebaseAuthUserId] },
+        customerName: { stringValue: vehicle_data[:customerName] }
+      }
+    }
+    
+    # Envoi des données à Firestore
+    document = FirebaseRestClient.firestore_request('vehicles', :post, firestore_payload)
     
     if document
-      render json: { status: "vehicle ajouté avec succès", document_data: document }, status: :created
+      render json: { status: "Véhicule ajouté avec succès", document_data: document }, status: :created
     else
-      render json: { error: "Erreur lors de l'ajout du vehicle" }, status: :internal_server_error
+      render json: { error: "Erreur lors de l'ajout du véhicule" }, status: :internal_server_error
     end
-  end  
+  end
   
   def update
     vehicle_data = params.require(:vehicle).permit(:make, :model, :year, :licensePlate, :firebaseAuthUserId, :customerName)
