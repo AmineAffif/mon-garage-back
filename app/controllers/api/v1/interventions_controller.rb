@@ -70,15 +70,16 @@ class Api::V1::InterventionsController < ApplicationController
   private
 
   def update_repair_status(repair_id, new_status)
-    # Préparation des données de mise à jour du statut
-    repair_data = {
-      fields: {
-        status: { stringValue: new_status }
+    # Utilisation de la mise à jour du champ spécifique `status`
+    FirebaseRestClient.firestore_request(
+      "repairs/#{repair_id}?updateMask.fieldPaths=status", # Spécifie que seul le champ `status` doit être mis à jour
+      :patch,
+      {
+        fields: {
+          status: { stringValue: new_status }
+        }
       }
-    }
-  
-    # Mise à jour du document de réparation avec le nouveau statut
-    FirebaseRestClient.firestore_request("repairs/#{repair_id}", :patch, repair_data)
+    )
   rescue RestClient::ExceptionWithResponse => e
     Rails.logger.error("Erreur lors de la mise à jour du statut de la réparation : #{e.response}")
   end
