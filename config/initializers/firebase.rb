@@ -7,8 +7,10 @@ class FirebaseRestClient
   SCOPE = "https://www.googleapis.com/auth/datastore"
 
   def self.get_access_token
+    firebase_config = Rails.application.credentials.firebase
+
     authorizer = Google::Auth::ServiceAccountCredentials.make_creds(
-      json_key_io: File.open(Rails.root.join("config/firebase_key.json")),
+      json_key_io: StringIO.new(firebase_config.to_json),
       scope: SCOPE
     )
     authorizer.fetch_access_token!
