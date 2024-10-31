@@ -28,6 +28,9 @@ Rails.application.routes.draw do
           delete 'by_firebase_auth_user_id/:firebaseAuthUserId', to: 'users#destroy_by_firebase_auth_user_id'
           get 'by_company_id/:companyId', to: 'users#by_company_id'
           get 'companies', to: 'users#index_companies'
+          post 'create_pro_demand', to: 'users#create_pro_demand'
+          get 'fetch_register_demands/:companyId', to: 'users#fetch_register_demands'
+          patch 'approve_register_demand/:id', to: 'users#approve_register_demand'
         end
       end
       get 'customers', to: 'users#index_customers'
