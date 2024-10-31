@@ -19,7 +19,38 @@ class Api::V1::UsersController < ApplicationController
     users = FirebaseRestClient.parse_firestore_documents(response)
     professional = users.select { |user| user[:role] == 'Professional' }
     render json: professional, status: :ok
-  end  
+  end
+
+  def index_companies
+    response = FirebaseRestClient.firestore_request(':runQuery', :post, {
+      structuredQuery: {
+        from: [{ collectionId: 'users' }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: 'role' },
+            op: 'EQUAL',
+            value: { stringValue: 'Company' }
+          }
+        }
+      }
+    })
+
+    if response.is_a?(Array)
+      companies = response.map do |res|
+        fields = res.dig('document', 'fields')
+        {
+          id: res.dig('document', 'name').split('/').last,
+          companyName: fields.dig('companyName', 'stringValue'),
+          companyAddress: fields.dig('companyAddress', 'stringValue'),
+          firebaseAuthUserId: fields.dig('firebaseAuthUserId', 'stringValue')
+        }
+      end.compact
+
+      render json: companies, status: :ok
+    else
+      render json: { error: 'No companies found' }, status: :not_found
+    end
+  end
 
   def show_by_firebase_auth_user_id
     firebase_auth_user_id = params[:firebaseAuthUserId]
@@ -64,7 +95,8 @@ class Api::V1::UsersController < ApplicationController
   
 
   def create
-    user_data = params.require(:user).permit(:firebaseAuthUserId, :email, :role, :fullName, :phone, :companyName, :companyPhone, :companyEmail, :companyAddress)
+    # Ajoutez :companyId à la liste des paramètres autorisés
+    user_data = params.require(:user).permit(:firebaseAuthUserId, :email, :role, :fullName, :phone, :companyName, :companyPhone, :companyEmail, :companyAddress, :companyId)
 
     # Formater les données de l'utilisateur pour Firestore
     firestore_payload = {
@@ -84,8 +116,11 @@ class Api::V1::UsersController < ApplicationController
         companyEmail: { stringValue: user_data[:companyEmail] },
         companyAddress: { stringValue: user_data[:companyAddress] }
       )
+    elsif user_data[:role] == "Professional" && user_data[:companyId]
+      firestore_payload[:fields].merge!(
+        companyId: { stringValue: user_data[:companyId] }
+      )
     end
-
 
     # Envoi des données à Firestore
     document = FirebaseRestClient.firestore_request('users', :post, firestore_payload)
@@ -96,6 +131,7 @@ class Api::V1::UsersController < ApplicationController
       render json: { error: "Erreur lors de l'ajout du user" }, status: :internal_server_error
     end
   end
+
   
   def update
     user_data = params.require(:user).permit(:email, :role, :fullName, :phone)
