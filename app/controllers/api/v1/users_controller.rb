@@ -64,8 +64,8 @@ class Api::V1::UsersController < ApplicationController
   
 
   def create
-    user_data = params.require(:user).permit(:firebaseAuthUserId, :email, :role, :fullName, :phone)
-    
+    user_data = params.require(:user).permit(:firebaseAuthUserId, :email, :role, :fullName, :phone, :companyName, :companyPhone, :companyEmail, :companyAddress)
+
     # Formater les données de l'utilisateur pour Firestore
     firestore_payload = {
       fields: {
@@ -73,13 +73,23 @@ class Api::V1::UsersController < ApplicationController
         email: { stringValue: user_data[:email] },
         role: { stringValue: user_data[:role] },
         fullName: { stringValue: user_data[:fullName] },
-        phone: { stringValue: user_data[:phone] }
+        phone: { stringValue: user_data[:phone] },
       }
     }
-    
+
+    if user_data[:role] == "Company"
+      firestore_payload[:fields].merge!(
+        companyName: { stringValue: user_data[:companyName] },
+        companyPhone: { stringValue: user_data[:companyPhone] },
+        companyEmail: { stringValue: user_data[:companyEmail] },
+        companyAddress: { stringValue: user_data[:companyAddress] }
+      )
+    end
+
+
     # Envoi des données à Firestore
     document = FirebaseRestClient.firestore_request('users', :post, firestore_payload)
-    
+
     if document
       render json: { status: "User ajouté avec succès", document_data: document }, status: :created
     else
@@ -133,5 +143,53 @@ class Api::V1::UsersController < ApplicationController
       render json: { error: 'User not found' }, status: :not_found
     end
   end
-  
+
+  def by_company_id
+    company_id = params[:companyId]
+
+    response = FirebaseRestClient.firestore_request(':runQuery', :post, {
+      structuredQuery: {
+        from: [{ collectionId: 'users' }],
+        where: {
+          compositeFilter: {
+            op: 'AND',
+            filters: [
+              {
+                fieldFilter: {
+                  field: { fieldPath: 'role' },
+                  op: 'EQUAL',
+                  value: { stringValue: 'Professional' }
+                }
+              },
+              {
+                fieldFilter: {
+                  field: { fieldPath: 'companyId' },
+                  op: 'EQUAL',
+                  value: { stringValue: company_id }
+                }
+              }
+            ]
+          }
+        }
+      }
+    })
+
+    if response.is_a?(Array)
+      professionals = response.map do |res|
+        fields = res.dig('document', 'fields')
+        {
+          id: res.dig('document', 'name').split('/').last,
+          fullName: fields.dig('fullName', 'stringValue'),
+          email: fields.dig('email', 'stringValue'),
+          phone: fields.dig('phone', 'stringValue'),
+          companyId: fields.dig('companyId', 'stringValue')
+        }
+      end.compact
+
+      render json: professionals, status: :ok
+    else
+      render json: { error: 'No professionals found' }, status: :not_found
+    end
+  end
+
 end

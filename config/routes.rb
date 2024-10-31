@@ -26,7 +26,7 @@ Rails.application.routes.draw do
         collection do
           get 'by_firebase_auth_user_id/:firebaseAuthUserId', to: 'users#show_by_firebase_auth_user_id'
           delete 'by_firebase_auth_user_id/:firebaseAuthUserId', to: 'users#destroy_by_firebase_auth_user_id'
-          get 'by_firebase_auth_user_id/:firebaseAuthUserId', to: 'users#show_by_firebase_auth_user_id'
+          get 'by_company_id/:companyId', to: 'users#by_company_id' # Nouvelle route ajoutée
         end
       end
       get 'customers', to: 'users#index_customers'
