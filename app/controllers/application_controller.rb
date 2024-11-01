@@ -1,7 +1,7 @@
 class ApplicationController < ActionController::API
   before_action :set_cors_headers
 
-  ALLOWED_ORIGINS = ['http://localhost:3001', 'https://mon-garage-d73hunanv-amine-affifs-projects.vercel.app'].freeze
+  ALLOWED_ORIGINS = ['http://localhost:3001', 'mon-garage.vercel.app'].freeze
 
   private
 
