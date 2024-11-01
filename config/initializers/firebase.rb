@@ -31,6 +31,7 @@ class FirebaseRestClient
     return [] unless response && response["documents"]
 
     response["documents"].map do |doc|
+      next unless doc['fields']
       fields = doc["fields"]
       parsed_data = { id: doc["name"].split("/").last }
       fields.each do |field_name, field_value|
@@ -40,7 +41,7 @@ class FirebaseRestClient
       end
 
       parsed_data
-    end
+    end.compact
   end
 
   # Méthode pour créer la structure JSON du document en fonction des champs du modèle

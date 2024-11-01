@@ -80,7 +80,7 @@ class Api::V1::VehiclesController < ApplicationController
       render json: { error: "Erreur de récupération des véhicules" }, status: :not_found
     end
   end
-  
+
   def by_repair
     repair_id = params[:repair_id]
     response = FirebaseRestClient.firestore_request('vehicles')

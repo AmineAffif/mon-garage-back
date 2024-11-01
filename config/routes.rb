@@ -6,7 +6,7 @@ Rails.application.routes.draw do
       resources :clients, only: [:index, :show, :create, :update, :destroy]
       resources :vehicles, only: [:index, :show, :create, :update, :destroy] do
         collection do
-          get 'by_customer', to: 'vehicles#by_customer'
+          get 'by_customer/:firebaseAuthUserId', to: 'vehicles#by_customer'
         end
       end
 
@@ -14,6 +14,7 @@ Rails.application.routes.draw do
         patch 'update_status', on: :member
         get 'update_status', on: :member
         get 'index_by_firebase_auth_user_id/:firebaseAuthUserId', to: 'repairs#index_by_firebase_auth_user_id', on: :collection
+        get 'index_by_company_id/:companyId', to: 'repairs#index_by_company_id', on: :collection
       end
       resources :interventions, only: [:index, :show, :create, :update, :destroy] do
         get 'by_repair/:repair_id', to: 'interventions#by_repair', on: :collection

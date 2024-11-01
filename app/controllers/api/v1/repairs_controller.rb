@@ -9,6 +9,54 @@ class Api::V1::RepairsController < ApplicationController
     render json: repairs, status: :ok
   end
 
+  require 'google/cloud/firestore'
+  
+  def index_by_company_id
+    company_id = params[:companyId]
+
+    # Requête structurée correcte pour filtrer les documents par companyId
+    response = FirebaseRestClient.firestore_request(':runQuery', :post, {
+      structuredQuery: {
+        from: [{ collectionId: 'repairs' }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: 'companyId' },
+            op: 'EQUAL',
+            value: { stringValue: company_id }
+          }
+        }
+      }
+    })
+
+    # Vérifiez si la réponse est un tableau et contient des documents
+    if response.is_a?(Array)
+      # Si la réponse contient des réparations, formate la réponse ainsi :
+      repairs = response.filter_map do |document|
+        next unless document['document'] && document['document']['fields']
+
+        fields = document['document']['fields']
+        {
+          id: document['document']['name'].split('/').last,
+          description: fields['description']['stringValue'],
+          date: fields['date']['stringValue'],
+          status: fields['status']['stringValue'],
+          vehicle: {
+            make: fields.dig('vehicle', 'mapValue', 'fields', 'make', 'stringValue'),
+            model: fields.dig('vehicle', 'mapValue', 'fields', 'model', 'stringValue'),
+            year: fields.dig('vehicle', 'mapValue', 'fields', 'year', 'integerValue'),
+            licensePlate: fields.dig('vehicle', 'mapValue', 'fields', 'licensePlate', 'stringValue')
+          }
+        }
+      end
+
+      render json: repairs, status: :ok
+    else
+      render json: { error: 'Réparations non trouvées' }, status: :not_found
+    end
+  end
+
+
+
   def index_by_firebase_auth_user_id
     firebase_auth_user_id = params[:firebaseAuthUserId]
     
@@ -153,10 +201,11 @@ class Api::V1::RepairsController < ApplicationController
 
 
   def create
-    # Récupère les données du client et du véhicule
+    # Récupère les données du client, du véhicule, et de la société
     customer_data = params[:repair][:customer]
     vehicle_data = params[:repair][:vehicle]
-  
+    company_id = params[:repair][:companyId] # Récupère companyId du client connecté
+
     # Requête pour chercher le client en utilisant firebaseAuthUserId
     customer_response = FirebaseRestClient.firestore_request(':runQuery', :post, {
       structuredQuery: {
@@ -171,7 +220,7 @@ class Api::V1::RepairsController < ApplicationController
         limit: 1
       }
     })
-  
+
     if customer_response.is_a?(Array) && customer_response.first['document']
       document = customer_response.first['document']
       firebase_auth_user_id = document.dig('fields', 'firebaseAuthUserId', 'stringValue')
@@ -179,30 +228,30 @@ class Api::V1::RepairsController < ApplicationController
       render json: { error: 'Client non trouvé ou erreur lors de la récupération de firebaseAuthUserId' }, status: :not_found
       return
     end
-  
+
     # Si un nouveau véhicule doit être créé
     vehicle_id = if vehicle_data[:id].nil?
-                   # Crée le véhicule sur Firestore
-                   vehicle_response = RestClient.post(
-                     'https://firestore.googleapis.com/v1/projects/mon-garage-1b850/databases/(default)/documents/vehicles',
-                     { fields: {
-                         make: { stringValue: vehicle_data[:make] },
-                         model: { stringValue: vehicle_data[:model] },
-                         year: { integerValue: vehicle_data[:year].to_i },
-                         licensePlate: { stringValue: vehicle_data[:licensePlate] },
-                         customerId: { stringValue: firebase_auth_user_id }
-                       }
-                     }.to_json,
-                     { content_type: :json, accept: :json }
-                   )
-                   vehicle_result = JSON.parse(vehicle_response.body)
-                   vehicle_result["name"].split("/").last
-                 else
-                   # Utilise l'ID du véhicule existant
-                   vehicle_data[:id]
-                 end
-  
-    # Prépare les données de la réparation avec `firebaseAuthUserId` du client
+                  # Crée le véhicule sur Firestore
+                  vehicle_response = RestClient.post(
+                    'https://firestore.googleapis.com/v1/projects/mon-garage-1b850/databases/(default)/documents/vehicles',
+                    { fields: {
+                        make: { stringValue: vehicle_data[:make] || "Unknown" },
+                        model: { stringValue: vehicle_data[:model] || "Unknown" },
+                        year: { integerValue: vehicle_data[:year].to_i },
+                        licensePlate: { stringValue: vehicle_data[:licensePlate] || "Unknown" },
+                        customerId: { stringValue: firebase_auth_user_id }
+                      }
+                    }.to_json,
+                    { content_type: :json, accept: :json }
+                  )
+                  vehicle_result = JSON.parse(vehicle_response.body)
+                  vehicle_result["name"].split("/").last
+                else
+                  # Utilise l'ID du véhicule existant
+                  vehicle_data[:id]
+                end
+
+    # Prépare les données de la réparation avec `firebaseAuthUserId` du client et `companyId`
     repair_data = {
       fields: {
         description: { stringValue: params[:repair][:description] || "No description provided" },
@@ -217,27 +266,28 @@ class Api::V1::RepairsController < ApplicationController
           mapValue: {
             fields: {
               id: { stringValue: vehicle_id },
-              make: { stringValue: vehicle_data[:make] },
-              model: { stringValue: vehicle_data[:model] },
+              make: { stringValue: vehicle_data[:make] || "Unknown" },
+              model: { stringValue: vehicle_data[:model] || "Unknown" },
               year: { integerValue: vehicle_data[:year].to_i },
-              licensePlate: { stringValue: vehicle_data[:licensePlate] }
+              licensePlate: { stringValue: vehicle_data[:licensePlate] || "Unknown" }
             }
           }
-        }
+        },
+        companyId: { stringValue: company_id || "Unknown" } # Vérifiez que companyId est bien présent
       }
     }
-  
+
     # Envoie les données de la réparation à Firestore
     response = RestClient.post(
       'https://firestore.googleapis.com/v1/projects/mon-garage-1b850/databases/(default)/documents/repairs',
       repair_data.to_json,
       { content_type: :json, accept: :json }
     )
-  
+
     # Vérifie et affiche la réponse
     if response.code == 200
       puts "Création réussie : #{response.body}"
-      
+
       # Envoi de l'email de notification au client
       customer = {
         fullName: document.dig('fields', 'fullName', 'stringValue'),
@@ -252,7 +302,7 @@ class Api::V1::RepairsController < ApplicationController
         description: params[:repair][:description]
       }
       RepairMailer.repair_created(customer, vehicle, repair).deliver_now
-  
+
       render json: { status: "Repair created successfully" }, status: :created
     else
       puts "Erreur de création : #{response.body}"
@@ -262,11 +312,7 @@ class Api::V1::RepairsController < ApplicationController
     puts "Erreur lors de la requête : #{e.response}"
     render json: { error: "Erreur lors de la création de la réparation" }, status: :unprocessable_entity
   end
-  
-  
-  
 
-  
   def update
     repair_id = params[:id]
     repair_data = params.require(:repair).permit(:description, :date, :status)

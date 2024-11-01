@@ -5,15 +5,63 @@ class Api::V1::UsersController < ApplicationController
   def index
     response = FirebaseRestClient.firestore_request('users')
     users = FirebaseRestClient.parse_firestore_documents(response)
-    render json: users, status: :ok
+
+    if users.present?
+      render json: users, status: :ok
+    else
+      render json: { error: "No users found" }, status: :not_found
+    end
   end
 
+
   def index_customers
-    response = FirebaseRestClient.firestore_request('users')
-    users = FirebaseRestClient.parse_firestore_documents(response)
-    customers = users.select { |user| user[:role] == 'Customer' }
-    render json: customers, status: :ok
+    company_id = params[:companyId]
+
+    response = FirebaseRestClient.firestore_request(':runQuery', :post, {
+      structuredQuery: {
+        from: [{ collectionId: 'users' }],
+        where: {
+          compositeFilter: {
+            op: 'AND',
+            filters: [
+              {
+                fieldFilter: {
+                  field: { fieldPath: 'role' },
+                  op: 'EQUAL',
+                  value: { stringValue: 'Customer' }
+                }
+              },
+              {
+                fieldFilter: {
+                  field: { fieldPath: 'companyId' },
+                  op: 'EQUAL',
+                  value: { stringValue: company_id }
+                }
+              }
+            ]
+          }
+        }
+      }
+    })
+
+    if response.is_a?(Array)
+      customers = response.map do |res|
+        fields = res.dig('document', 'fields')
+        {
+          id: res.dig('document', 'name').split('/').last,
+          fullName: fields.dig('fullName', 'stringValue'),
+          email: fields.dig('email', 'stringValue'),
+          phone: fields.dig('phone', 'stringValue'),
+          companyId: fields.dig('companyId', 'stringValue')
+        }
+      end.compact
+
+      render json: customers, status: :ok
+    else
+      render json: { error: 'No customers found' }, status: :not_found
+    end
   end
+
   
   def index_professionals
     response = FirebaseRestClient.firestore_request('users')
@@ -39,10 +87,12 @@ class Api::V1::UsersController < ApplicationController
     if response.is_a?(Array)
       companies = response.map do |res|
         fields = res.dig('document', 'fields')
+
+        # Vérifiez la présence des champs avant de les ajouter
         {
           id: res.dig('document', 'name').split('/').last,
-          companyName: fields.dig('companyName', 'stringValue'),
-          companyAddress: fields.dig('companyAddress', 'stringValue'),
+          companyName: fields.dig('companyName', 'stringValue') || "",
+          companyAddress: fields.dig('companyAddress', 'stringValue') || "",
           firebaseAuthUserId: fields.dig('firebaseAuthUserId', 'stringValue')
         }
       end.compact
@@ -52,6 +102,7 @@ class Api::V1::UsersController < ApplicationController
       render json: { error: 'No companies found' }, status: :not_found
     end
   end
+
 
   def login
     email = params[:email]
@@ -131,7 +182,7 @@ class Api::V1::UsersController < ApplicationController
   
 
   def create
-    # Ajoutez :companyId à la liste des paramètres autorisés
+    # Ajoutez :companyName, :companyPhone, :companyEmail, :companyAddress à la liste des paramètres autorisés
     user_data = params.require(:user).permit(:firebaseAuthUserId, :email, :role, :fullName, :phone, :companyName, :companyPhone, :companyEmail, :companyAddress, :companyId)
 
     # Formater les données de l'utilisateur pour Firestore
@@ -141,21 +192,20 @@ class Api::V1::UsersController < ApplicationController
         email: { stringValue: user_data[:email] },
         role: { stringValue: user_data[:role] },
         fullName: { stringValue: user_data[:fullName] },
-        phone: { stringValue: user_data[:phone] },
+        phone: { stringValue: user_data[:phone] }
       }
     }
 
+    # Ajouter des champs pour l'entreprise si le rôle est "Company" et que les valeurs sont présentes
     if user_data[:role] == "Company"
-      firestore_payload[:fields].merge!(
-        companyName: { stringValue: user_data[:companyName] },
-        companyPhone: { stringValue: user_data[:companyPhone] },
-        companyEmail: { stringValue: user_data[:companyEmail] },
-        companyAddress: { stringValue: user_data[:companyAddress] }
-      )
-    elsif user_data[:role] == "Professional" && user_data[:companyId]
-      firestore_payload[:fields].merge!(
-        companyId: { stringValue: user_data[:companyId] }
-      )
+      firestore_payload[:fields][:companyName] = { stringValue: user_data[:companyName].presence || "" }
+      firestore_payload[:fields][:companyPhone] = { stringValue: user_data[:companyPhone].presence || "" }
+      firestore_payload[:fields][:companyEmail] = { stringValue: user_data[:companyEmail].presence || "" }
+      firestore_payload[:fields][:companyAddress] = { stringValue: user_data[:companyAddress].presence || "" }
+    elsif user_data[:role] == "Professional" && user_data[:companyId].present?
+      firestore_payload[:fields][:companyId] = { stringValue: user_data[:companyId] }
+    elsif user_data[:role] == "Customer" && user_data[:companyId].present?
+      firestore_payload[:fields][:companyId] = { stringValue: user_data[:companyId] }
     end
 
     # Envoi des données à Firestore
@@ -168,7 +218,6 @@ class Api::V1::UsersController < ApplicationController
       render json: { error: "Erreur lors de l'ajout du user. Vérifiez les logs pour plus de détails." }, status: :internal_server_error
     end
   end
-
   
   def update
     user_data = params.require(:user).permit(:email, :role, :fullName, :phone)
