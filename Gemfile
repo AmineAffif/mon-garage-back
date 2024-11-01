@@ -32,6 +32,8 @@ gem "bootsnap", require: false
 
 # Use Rack CORS for handling Cross-Origin Resource Sharing (CORS), making cross-origin AJAX possible
 gem "rack-cors"
+# Use sqlite3 as the database for Active Record
+gem "sqlite3", "~> 1.4"
 
 # gem 'pg', '~> 1.5', '>= 1.5.4'
 gem 'google-cloud-firestore'
@@ -46,8 +48,5 @@ end
 group :development do
   # Speed up commands on slow machines / big apps [https://github.com/rails/spring]
   # gem "spring"
-
-  # Use sqlite3 as the database for Active Record
-  gem "sqlite3", "~> 1.4"
 end
 
