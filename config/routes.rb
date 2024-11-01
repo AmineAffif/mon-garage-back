@@ -6,7 +6,7 @@ Rails.application.routes.draw do
       resources :clients, only: [:index, :show, :create, :update, :destroy]
       resources :vehicles, only: [:index, :show, :create, :update, :destroy] do
         collection do
-          get 'by_customer/:firebaseAuthUserId', to: 'vehicles#by_customer'
+          get 'by_customer', to: 'vehicles#by_customer'
         end
       end
 
