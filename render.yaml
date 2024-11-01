@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: mon-garage-back
+    env: ruby
+    plan: starter
+    buildCommand: "bundle install && rails assets:precompile"
+    startCommand: "rails server -b 0.0.0.0 -p $PORT"
+    envVars:
+      - key: RAILS_ENV
+        value: production
+      - key: RAILS_MASTER_KEY
+        sync: false
