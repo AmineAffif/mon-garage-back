@@ -30,16 +30,43 @@ class Api::V1::RepairsController < ApplicationController
 
     # Vérifiez si la réponse est un tableau et contient des documents
     if response.is_a?(Array)
-      # Si la réponse contient des réparations, formate la réponse ainsi :
       repairs = response.filter_map do |document|
         next unless document['document'] && document['document']['fields']
 
         fields = document['document']['fields']
+        firebase_auth_user_id = fields.dig('customer', 'mapValue', 'fields', 'firebaseAuthUserId', 'stringValue')
+
+        # Requête pour obtenir le fullName du customer
+        customer_full_name = "Unknown Customer"
+        if firebase_auth_user_id
+          customer_response = FirebaseRestClient.firestore_request(':runQuery', :post, {
+            structuredQuery: {
+              from: [{ collectionId: 'users' }],
+              where: {
+                fieldFilter: {
+                  field: { fieldPath: 'firebaseAuthUserId' },
+                  op: 'EQUAL',
+                  value: { stringValue: firebase_auth_user_id }
+                }
+              },
+              limit: 1
+            }
+          })
+
+          if customer_response.is_a?(Array) && customer_response.first['document']
+            customer_document = customer_response.first['document']
+            customer_full_name = customer_document.dig('fields', 'fullName', 'stringValue') || "Unknown Customer"
+          end
+        end
+
         {
           id: document['document']['name'].split('/').last,
           description: fields['description']['stringValue'],
           date: fields['date']['stringValue'],
           status: fields['status']['stringValue'],
+          customer: {
+            fullName: customer_full_name
+          },
           vehicle: {
             make: fields.dig('vehicle', 'mapValue', 'fields', 'make', 'stringValue'),
             model: fields.dig('vehicle', 'mapValue', 'fields', 'model', 'stringValue'),
