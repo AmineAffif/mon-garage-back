@@ -1,0 +1,20 @@
+name: Keep Backend Awake
+
+# Déclencher ce workflow selon un plan
+on:
+  schedule:
+    # Planification en utilisant le cron (ici, toutes les 15 minutes)
+    - cron: '*/10 * * * *'
+
+# Permet aussi de lancer manuellement ce workflow depuis l'interface GitHub
+  workflow_dispatch:
+
+jobs:
+  keep-awake:
+    runs-on: ubuntu-latest  # Spécifie un environnement Ubuntu pour exécuter ce job
+
+    steps:
+      # Étape 1: Envoyer une requête pour réveiller le backend
+      - name: Send Keep-Alive Request to Backend
+        run: |
+          curl -X GET https://mon-garage-back.onrender.com/api/v1/health_check

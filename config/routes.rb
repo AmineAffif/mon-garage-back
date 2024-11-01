@@ -1,8 +1,10 @@
 Rails.application.routes.draw do
   root to: redirect('/api/v1/users') # Redirection vers une ressource existante, par exemple les garages.
-
+  
   namespace :api do
     namespace :v1 do
+      get '/health_check', to: 'health#check'
+
       resources :garages, only: [:index, :show, :create, :update, :destroy]
       resources :employees, only: [:index, :show, :create, :update, :destroy]
       resources :clients, only: [:index, :show, :create, :update, :destroy]
