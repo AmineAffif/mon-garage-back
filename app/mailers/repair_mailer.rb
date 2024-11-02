@@ -48,7 +48,7 @@ class RepairMailer < ApplicationMailer
 
     begin
       RestClient.post(
-        'https://firestore.googleapis.com/v1/projects/mon-garage-1b850/databases/(default)/documents/log_sent_email',
+        'https://firestore.googleapis.com/v1/projects/mon-garage-1b850/databases/(default)/documents/log_sent_emails',
         log_sent_email_data.to_json,
         { content_type: :json, accept: :json }
       )

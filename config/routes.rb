@@ -41,6 +41,7 @@ Rails.application.routes.draw do
       end
       get 'customers', to: 'users#index_customers'
       get 'customers', to: 'users#index_professionals'
+      resources :log_sent_emails, only: [:index]
     end
   end
 end
