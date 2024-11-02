@@ -1,5 +1,5 @@
 class Api::V1::LogSentEmailsController < ApplicationController
-  before_action :authenticate_user, only: [:index]
+  before_action :authenticate_user, only: [:index, :show]
 
   def index
     company_id = params[:companyId]
@@ -52,6 +52,33 @@ class Api::V1::LogSentEmailsController < ApplicationController
     end
   rescue StandardError => e
     Rails.logger.error("Error in LogSentEmailsController#index: #{e.message}")
+    render json: { error: 'Internal Server Error' }, status: :internal_server_error
+  end
+
+  def show
+    log_id = params[:id]
+    Rails.logger.info("Received log_id: #{log_id}")
+
+    response = FirebaseRestClient.firestore_request("log_sent_emails/#{log_id}")
+    Rails.logger.info("Response Body: #{response}")
+
+    if response && response['fields']
+      fields = response['fields']
+      log = {
+        id: log_id,
+        recipient: fields.dig('customerEmail', 'stringValue') || 'Unknown Recipient',
+        subject: fields.dig('subject', 'stringValue') || 'No Subject',
+        body: fields.dig('body', 'stringValue') || 'No Body',
+        dateSent: fields.dig('timestamp', 'timestampValue') || 'Unknown Date'
+      }
+      Rails.logger.info("Parsed log: #{log}")
+      render json: log, status: :ok
+    else
+      Rails.logger.error("Log not found for ID: #{log_id}")
+      render json: { error: 'Log not found' }, status: :not_found
+    end
+  rescue StandardError => e
+    Rails.logger.error("Error in LogSentEmailsController#show: #{e.message}")
     render json: { error: 'Internal Server Error' }, status: :internal_server_error
   end
 end
