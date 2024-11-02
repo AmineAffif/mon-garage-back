@@ -231,7 +231,7 @@ class Api::V1::RepairsController < ApplicationController
     # Récupère les données du client, du véhicule, et de la société
     customer_data = params[:repair][:customer]
     vehicle_data = params[:repair][:vehicle]
-    company_id = params[:repair][:companyId] # Récupère companyId du client connecté
+    company_id = params[:repair][:companyId]
 
     # Requête pour chercher le client en utilisant firebaseAuthUserId
     customer_response = FirebaseRestClient.firestore_request(':runQuery', :post, {
@@ -251,6 +251,7 @@ class Api::V1::RepairsController < ApplicationController
     if customer_response.is_a?(Array) && customer_response.first['document']
       document = customer_response.first['document']
       firebase_auth_user_id = document.dig('fields', 'firebaseAuthUserId', 'stringValue')
+      company_id ||= document.dig('fields', 'companyId', 'stringValue') # Récupère companyId depuis le document utilisateur si non fourni
     else
       render json: { error: 'Client non trouvé ou erreur lors de la récupération de firebaseAuthUserId' }, status: :not_found
       return
@@ -278,7 +279,7 @@ class Api::V1::RepairsController < ApplicationController
                   vehicle_data[:id]
                 end
 
-    # Prépare les données de la réparation avec `firebaseAuthUserId` du client et `companyId`
+    # Prépare les données de la réparation avec firebaseAuthUserId du client et companyId
     repair_data = {
       fields: {
         description: { stringValue: params[:repair][:description] || "No description provided" },
@@ -286,7 +287,9 @@ class Api::V1::RepairsController < ApplicationController
         status: { stringValue: params[:repair][:status] || "pending" },
         customer: {
           mapValue: {
-            fields: { firebaseAuthUserId: { stringValue: firebase_auth_user_id } }
+            fields: {
+              firebaseAuthUserId: { stringValue: firebase_auth_user_id }
+            }
           }
         },
         vehicle: {
@@ -300,7 +303,7 @@ class Api::V1::RepairsController < ApplicationController
             }
           }
         },
-        companyId: { stringValue: company_id || "Unknown" } # Vérifiez que companyId est bien présent
+        companyId: { stringValue: company_id || "Unknown" }
       }
     }
 
@@ -318,7 +321,9 @@ class Api::V1::RepairsController < ApplicationController
       # Envoi de l'email de notification au client
       customer = {
         fullName: document.dig('fields', 'fullName', 'stringValue'),
-        email: document.dig('fields', 'email', 'stringValue')
+        email: document.dig('fields', 'email', 'stringValue'),
+        firebaseAuthUserId: firebase_auth_user_id,
+        companyId: company_id
       }
       vehicle = {
         make: vehicle_data[:make],
@@ -339,6 +344,8 @@ class Api::V1::RepairsController < ApplicationController
     puts "Erreur lors de la requête : #{e.response}"
     render json: { error: "Erreur lors de la création de la réparation" }, status: :unprocessable_entity
   end
+
+
 
   def update
     repair_id = params[:id]

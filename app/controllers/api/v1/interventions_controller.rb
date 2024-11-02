@@ -27,29 +27,33 @@ class Api::V1::InterventionsController < ApplicationController
       render json: { error: "Invalid date format" }, status: :unprocessable_entity
       return
     end
-  
-    firestore_data = {
-      fields: {
-        repairId: { stringValue: intervention_data[:repairId] },
-        date: { timestampValue: parsed_date.iso8601 }, # Firestore attend un format de type `timestamp`
-        description: { stringValue: intervention_data[:description] }
+
+    # Récupération des informations de la réparation
+    repair_id = intervention_data[:repairId]
+    repair_response = FirebaseRestClient.firestore_request("repairs/#{repair_id}")
+
+    if repair_response && repair_response["fields"]
+      # Récupération de `firebaseAuthUserId` et `companyId` à partir de la réparation
+      firebase_auth_user_id = repair_response.dig("fields", "customer", "mapValue", "fields", "firebaseAuthUserId", "stringValue")
+      company_id = repair_response.dig("fields", "companyId", "stringValue")
+
+      firestore_data = {
+        fields: {
+          repairId: { stringValue: repair_id },
+          date: { timestampValue: parsed_date.iso8601 },
+          description: { stringValue: intervention_data[:description] },
+          firebaseAuthUserId: { stringValue: firebase_auth_user_id },
+          companyId: { stringValue: company_id }
+        }
       }
-    }
-  
-    # Création de l'intervention dans Firestore
-    document = FirebaseRestClient.firestore_request('interventions', :post, firestore_data)
-  
-    if document
-      # Mise à jour du statut de la réparation associée à "in progress"
-      repair_id = intervention_data[:repairId]
-      update_repair_status(repair_id, 'in progress')
-  
-      # Récupération des informations de la réparation
-      repair_response = FirebaseRestClient.firestore_request("repairs/#{repair_id}")
-      if repair_response && repair_response["fields"]
-        # Récupération de `firebaseAuthUserId` du client à partir de la réparation
-        firebase_auth_user_id = repair_response.dig("fields", "customer", "mapValue", "fields", "firebaseAuthUserId", "stringValue")
-  
+
+      # Création de l'intervention dans Firestore
+      document = FirebaseRestClient.firestore_request('interventions', :post, firestore_data)
+
+      if document
+        # Mise à jour du statut de la réparation associée à "in progress"
+        update_repair_status(repair_id, 'in progress')
+
         # Recherche du document utilisateur par `firebaseAuthUserId`
         customer_response = FirebaseRestClient.firestore_request(':runQuery', :post, {
           structuredQuery: {
@@ -64,35 +68,37 @@ class Api::V1::InterventionsController < ApplicationController
             limit: 1
           }
         })
-  
-        # Vérifiez si le client a été trouvé
+
         if customer_response.is_a?(Array) && customer_response.first['document']
           customer_document = customer_response.first['document']
           customer = {
             fullName: customer_document.dig('fields', 'fullName', 'stringValue'),
-            email: customer_document.dig('fields', 'email', 'stringValue')
+            email: customer_document.dig('fields', 'email', 'stringValue'),
+            firebaseAuthUserId: firebase_auth_user_id,
+            companyId: company_id
           }
-  
+
           vehicle = {
             make: repair_response.dig("fields", "vehicle", "mapValue", "fields", "make", "stringValue"),
             model: repair_response.dig("fields", "vehicle", "mapValue", "fields", "model", "stringValue"),
             year: repair_response.dig("fields", "vehicle", "mapValue", "fields", "year", "integerValue")
           }
-  
+
           # Envoi de l'email de notification pour l'intervention créée
           RepairMailer.intervention_created(customer, vehicle, intervention_data).deliver_now
         else
           Rails.logger.error("Client introuvable pour l'envoi de l'email d'intervention créée : #{firebase_auth_user_id}")
         end
+
+        render json: { id: document['name'].split('/').last, **intervention_data }, status: :created
       else
-        Rails.logger.error("Réparation introuvable pour l'envoi de l'email d'intervention créée")
+        render json: { error: "Erreur lors de l'ajout de l'intervention" }, status: :internal_server_error
       end
-  
-      render json: { id: document['name'].split('/').last, **intervention_data }, status: :created
     else
-      render json: { error: "Erreur lors de l'ajout de l'intervention" }, status: :internal_server_error
+      render json: { error: "Réparation introuvable pour l'ajout de l'intervention" }, status: :not_found
     end
   end
+
 
   def update
     intervention_data = params.require(:intervention).permit(:repairId, :date, :description)
